@@ -1,0 +1,5 @@
+{
+  "name": "PDF & Image Master",
+  "description": "A powerful, client-side utility for converting PDF to JPG, JPG to PDF, and merging multiple documents or images into a single PDF file with high performance and privacy.",
+  "requestFramePermissions": []
+}
