@@ -226,7 +226,7 @@ const App: React.FC = () => {
               </div>
               <div className="text-center">
                 <p className="font-bold text-gray-900">Merge to PDF</p>
-                <p className="text-xs text-gray-500 mt-1">Combine all items into one PDF</p>
+                <p className="text-xs text-gray-500 mt-1">Export PDF pages as images (ZIP if &gt; 1p)</p>
               </div>
             </button>
 
