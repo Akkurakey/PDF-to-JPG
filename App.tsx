@@ -11,6 +11,7 @@ import {
   AlertCircle,
   Plus
 } from 'lucide-react';
+// 假设这些类型和你本地的一致
 import { ManagedFile, FileType, ProcessingStatus } from './types';
 import FileCard from './components/FileCard';
 import { imagesToPdf, mergePdfs, pdfToImages, downloadBlob, createZipFromImages } from './services/pdfTools';
@@ -22,10 +23,15 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // --- 逻辑处理部分保持不变 ---
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newFiles = Array.from(e.target.files).map((file: File) => {
-        const type = file.type as FileType;
+        // 简单的类型判断逻辑，实际项目中可能需要更严谨的判断
+        let type: FileType = FileType.UNKNOWN;
+        if (file.type === 'application/pdf') type = FileType.PDF;
+        else if (file.type.startsWith('image/')) type = FileType.IMAGE;
+
         return {
           id: Math.random().toString(36).substring(2, 11),
           file,
@@ -37,6 +43,8 @@ const App: React.FC = () => {
       });
       setFiles(prev => [...prev, ...newFiles]);
     }
+    // 重置 input value 允许重复上传同名文件
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const removeFile = (id: string) => {
@@ -85,6 +93,7 @@ const App: React.FC = () => {
       setStatus('error');
     } finally {
       setProgress(0);
+      setStatus('idle'); // 任务完成后重置状态，或者你可以保留 completed 状态
     }
   };
 
@@ -122,14 +131,17 @@ const App: React.FC = () => {
       setStatus('error');
     } finally {
       setProgress(0);
+      setStatus('idle');
     }
   };
 
-  const isAllImages = files.length > 0 && files.every(f => f.type !== FileType.PDF);
+  // 辅助变量
+  const isProcessing = status === 'processing';
+  const hasFiles = files.length > 0;
   const hasPdf = files.some(f => f.type === FileType.PDF);
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-gray-50">
       <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -138,15 +150,104 @@ const App: React.FC = () => {
             </div>
             <h1 className="font-bold text-xl text-gray-900 tracking-tight">MasterPDF</h1>
           </div>
+          {/* 头部右侧操作区 */}
+          {hasFiles && (
+            <button 
+              onClick={clearAll}
+              className="text-gray-500 hover:text-red-600 transition-colors flex items-center gap-1 text-sm font-medium"
+              disabled={isProcessing}
+            >
+              <Trash2 size={16} />
+              Clear All
+            </button>
+          )}
         </div>
       </header>
 
       <main className="flex-1 max-w-5xl mx-auto w-full p-4 md:p-8 space-y-8">
+        
+        {/* 1. 错误提示区域 */}
+        {error && (
+          <div className="bg-red-50 text-red-700 p-4 rounded-lg flex items-center gap-3 border border-red-100">
+            <AlertCircle size={20} />
+            <span>{error}</span>
+          </div>
+        )}
 
-        {/* 关键修复点在这里 */}
-        <p className="text-xs text-gray-500 mt-1">
-          Export PDF pages as images (ZIP if &gt; 1p)
-        </p>
+        {/* 2. 拖拽/上传区域 */}
+        <div 
+          onClick={() => !isProcessing && fileInputRef.current?.click()}
+          className={`
+            border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all
+            flex flex-col items-center justify-center gap-4 group
+            ${isProcessing ? 'opacity-50 cursor-not-allowed border-gray-200 bg-gray-50' : 'border-gray-300 hover:border-indigo-500 hover:bg-indigo-50/30'}
+          `}
+        >
+          <input 
+            ref={fileInputRef} 
+            type="file" 
+            className="hidden" 
+            multiple 
+            accept="application/pdf,image/png,image/jpeg,image/jpg"
+            onChange={handleFileChange}
+            disabled={isProcessing}
+          />
+          
+          <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+            {isProcessing ? <Loader2 className="animate-spin" size={32} /> : <Upload size={32} />}
+          </div>
+          
+          <div className="space-y-1">
+            <h3 className="font-semibold text-lg text-gray-900">
+              {isProcessing ? 'Processing...' : 'Click or Drag files here'}
+            </h3>
+            <p className="text-gray-500 text-sm">
+              Supports PDF, JPG, PNG
+            </p>
+          </div>
+        </div>
+
+        {/* 3. 文件列表区域 (如果 files > 0 才显示) */}
+        {hasFiles && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {files.map(file => (
+              <FileCard 
+                key={file.id} 
+                file={file} 
+                onRemove={() => removeFile(file.id)} 
+              />
+            ))}
+          </div>
+        )}
+
+        {/* 4. 操作按钮区域 */}
+        {hasFiles && (
+            <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 md:static md:bg-transparent md:border-0 md:p-0">
+                <div className="max-w-5xl mx-auto flex flex-col md:flex-row gap-4 justify-end">
+                    
+                    {/* 只有存在 PDF 时才显示转图片按钮 */}
+                    {hasPdf && (
+                        <button
+                            onClick={handlePdfToJpg}
+                            disabled={isProcessing}
+                            className="flex-1 md:flex-none btn-secondary bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                        >
+                            <FileImage size={20} />
+                            PDF to JPG
+                        </button>
+                    )}
+
+                    <button
+                        onClick={handleMergeToPdf}
+                        disabled={isProcessing}
+                        className="flex-1 md:flex-none bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-6 rounded-lg flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isProcessing ? <Loader2 className="animate-spin" size={20} /> : <Download size={20} />}
+                        {files.length > 1 ? 'Merge Files' : 'Convert/Download'}
+                    </button>
+                </div>
+            </div>
+        )}
 
       </main>
     </div>
